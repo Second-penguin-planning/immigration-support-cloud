@@ -5,7 +5,7 @@
 | Phase | 内容 | 状態 |
 | --- | --- | --- |
 | Phase1 | 設計（要件定義・アーキテクチャ・データモデル概要・画面設計・セキュリティ方針・開発環境構築） | ✅ 完了 |
-| Phase2 | データベース設計（Prismaスキーマ確定・マイグレーション・シード投入） | ✅ 完了（ローカルDB未接続のためマイグレーション未適用、下記参照） |
+| Phase2 | データベース設計（Prismaスキーマ確定・マイグレーション・シード投入） | ✅ 完了（実DB結合確認済み） |
 | Phase3 | ログイン機能（Auth.js導入・メール認証・パスワードリセット・権限管理） | 未着手 |
 | Phase4 | 顧客管理（法人/外国人/在留資格CRUD・検索・CSVダウンロード・Excel取込） | 未着手 |
 | Phase5 | CSV生成・PDF管理（テンプレート機構・書類アップロード・不足書類表示） | 未着手 |
@@ -36,19 +36,20 @@
 - 初期マイグレーション（`prisma/migrations/20260705000000_init`）を
   `prisma migrate diff --from-empty --to-schema=... --script` でオフライン生成・レビュー済み
 
-### 既知の制約（本開発環境の事情）
+### DB結合確認（実施済み）
 
-作業環境にDocker/ローカルPostgreSQLが無かったため、マイグレーションの実DB適用・シード実行・
-Prisma Client拡張の実DB結合テストは未実施。スキーマ検証（`prisma validate`）・型生成
-（`prisma generate`）・暗号化ロジックの単体テスト（Vitest）は実施済み。
-DB接続が可能になった時点で、以下を実行して結合確認を行うこと。
+Docker Desktop導入後、以下を実行して実DBでの動作を確認した。
 
 ```bash
-npm run db:up        # Docker Postgresを起動する場合
-npm run db:deploy     # prisma/migrations の履歴を適用
-npm run db:seed        # サンプルデータ投入
-npm run db:studio      # 投入結果の確認
+npm run db:up        # PostgreSQLコンテナ起動 → healthy確認
+npm run db:deploy     # 初期マイグレーション適用 成功
+npm run db:seed        # サンプルデータ投入 成功
 ```
+
+- DB生データ（`docker exec isc-postgres psql ...`）で `passport_number` 列が暗号文（平文と異なる文字列）で
+  保存されていることを確認
+- Prisma Client（`src/server/db/client.ts`）経由での読み取りでは `passportNumber` が元の平文
+  （`N1234567`）に復号されて返ることを確認（暗号化・復号の往復が実DBで正しく機能）
 
 ## Phase3 で着手する内容（次工程）
 
@@ -56,4 +57,3 @@ npm run db:studio      # 投入結果の確認
 - メール認証・パスワードリセット（`VerificationToken`モデルを使用）の実装
 - ロールベースアクセス制御（admin/staff/viewer）をProxy(`proxy.ts`)とServer Action双方で実装
 - ログイン・認可の単体/結合テスト
-- 上記「既知の制約」のDB結合確認をPhase3着手前後で解消する
