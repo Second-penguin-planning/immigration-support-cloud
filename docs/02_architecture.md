@@ -48,6 +48,15 @@
 - Credentials providerはDBセッション戦略と相性が悪いため、`session: { strategy: 'jwt' }` を
   明示している。`@auth/prisma-adapter` はOAuth向けの機能が中心のため導入せず、
   ユーザー検索・パスワード照合は自前で実装している。
+- `next-auth`は`nodemailer@^7`を任意のpeer依存として持つが（未使用の組み込みEmailプロバイダ用）、
+  本プロジェクトは脆弱性修正のため`nodemailer@^9`を直接使用する。この差分による`npm install`時の
+  ERESOLVEエラーを避けるため、`package.json`の`overrides`で`nodemailer`のバージョンを固定している。
+
+### Excel解析ライブラリの選定（実装時の注意、Phase4で確認）
+
+- `xlsx`(SheetJS)のnpm公開版は`0.18.5`で止まっており、既知の脆弱性(プロトタイプ汚染等)が
+  修正されたバージョンはSheetJS独自CDN配布のみでnpmに公開されていない。そのため本プロジェクトでは
+  Excel読み取りに`exceljs`を採用した（[src/lib/excel-import.ts](../src/lib/excel-import.ts)）。
 
 ## 2. ディレクトリ構成（完成形の設計。各Phaseで段階的に実体を作成する）
 
@@ -67,19 +76,21 @@ immigration-support-cloud/
 │   │   ├── (dashboard)/         # [Phase3〜] 認証必須の画面群
 │   │   │   ├── dashboard/       # [Phase3] ダッシュボード（期限管理等はPhase4以降で拡張）
 │   │   │   ├── settings/users/  # [Phase3] ユーザー・権限管理（管理者のみ）
-│   │   │   ├── clients/         # 顧客管理（Phase4）
+│   │   │   ├── clients/         # [Phase4] 顧客管理（一覧/検索/新規/詳細/外国人/在留資格/Excel取込）
 │   │   │   ├── reports/         # 定期届出（Phase7）
 │   │   │   └── documents/       # PDF/書類管理（Phase5）
-│   │   ├── api/auth/[...nextauth]/route.ts  # [Phase3] Auth.jsのRoute Handler
+│   │   ├── api/
+│   │   │   ├── auth/[...nextauth]/route.ts  # [Phase3] Auth.jsのRoute Handler
+│   │   │   └── clients/export/route.ts       # [Phase4] 顧客CSVダウンロード
 │   │   ├── layout.tsx
 │   │   └── page.tsx             # 認証状態に応じて /dashboard へredirect
 │   ├── components/
-│   │   ├── ui/                  # [Phase3] button/input/label/alert等の共通UIプリミティブ
+│   │   ├── ui/                  # [Phase3/4] button/input/label/select/textarea/alert等の共通UIプリミティブ
 │   │   └── layout/              # ヘッダー・サイドバー等のアプリシェル
 │   ├── features/                # 機能単位の実装（コンポーネント・hooks・Server Action・validationを同居）
 │   │   ├── auth/                # [Phase3] ログイン・パスワードリセット
 │   │   ├── users/                # [Phase3] ユーザー招待・権限管理
-│   │   ├── clients/
+│   │   ├── clients/              # [Phase4] 法人/外国人/在留資格CRUD・検索・Excel取込
 │   │   ├── csv-export/
 │   │   ├── pdf-documents/
 │   │   ├── periodic-reports/
@@ -89,10 +100,13 @@ immigration-support-cloud/
 │   │   ├── db/                  # [Phase2] Prisma Clientのシングルトン・暗号化拡張（client.ts, encryption.ts, pii-fields.ts）
 │   │   ├── auth/                 # [Phase3] Auth.js設定・検証トークン・RBACガード（config.ts, index.ts, tokens.ts, guards.ts）
 │   │   ├── email/                # [Phase3] メール送信（mailer.ts、SMTP未設定時はログ出力にフォールバック）
-│   │   ├── repositories/        # Prismaを直接叩くデータアクセス層
+│   │   ├── repositories/        # [Phase4] tenantIdスコープを強制するデータアクセス層
+│   │   │   ├── client-repository.ts
+│   │   │   ├── foreign-national-repository.ts
+│   │   │   └── residence-status-repository.ts
 │   │   └── services/            # 複数repositoryを組み合わせるドメインロジック
 │   ├── generated/prisma/        # [Phase2] `prisma generate` の出力。gitignore対象・コミットしない
-│   ├── lib/                     # 汎用ユーティリティ（cn, logger, date, csv, file-naming等）
+│   ├── lib/                     # 汎用ユーティリティ（cn, logger, csv.ts, excel-import.ts等）
 │   ├── types/                   # プロジェクト共通の型定義
 │   └── config/                  # サイト定数・ナビゲーション定義・feature flag
 ├── docker-compose.yml            # ローカル開発用PostgreSQL

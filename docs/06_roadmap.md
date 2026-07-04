@@ -7,7 +7,7 @@
 | Phase1 | 設計（要件定義・アーキテクチャ・データモデル概要・画面設計・セキュリティ方針・開発環境構築） | ✅ 完了 |
 | Phase2 | データベース設計（Prismaスキーマ確定・マイグレーション・シード投入） | ✅ 完了（実DB結合確認済み） |
 | Phase3 | ログイン機能（Auth.js導入・メール認証・パスワードリセット・権限管理） | ✅ 完了（実DB・ブラウザ動作確認済み） |
-| Phase4 | 顧客管理（法人/外国人/在留資格CRUD・検索・CSVダウンロード・Excel取込） | 未着手 |
+| Phase4 | 顧客管理（法人/外国人/在留資格CRUD・検索・CSVダウンロード・Excel取込） | ✅ 完了（実DB・ブラウザ動作確認済み） |
 | Phase5 | CSV生成・PDF管理（テンプレート機構・書類アップロード・不足書類表示） | 未着手 |
 | Phase6 | AI補助（OCR・PDF読取・不足項目抽出・誤入力検知・入力候補） | 未着手 |
 | Phase7 | 定期届出（前回データコピー・差分入力・面談記録・支援実施状況） | 未着手 |
@@ -86,9 +86,45 @@ Docker上の実DBに対し、開発サーバーで以下を確認した。
 - ログイン試行のレート制限（[05_security.md](./05_security.md)参照。Redis等導入後に対応）
 - 二段階認証（TOTP）
 
-## Phase4 で着手する内容（次工程）
+## Phase4 完了内容
 
-- 顧客管理: 法人情報（Client）・外国人情報（ForeignNational）・在留資格（ResidenceStatus）のCRUD画面
-- 検索（法人名・氏名・在留カード番号・期限範囲・担当者の複合条件）とCSVダウンロード
-- Excelアップロードによる一括取込（自動解析・エラー表示）
-- `server/repositories`層の導入（`tenantId`スコープを一元的に強制する設計、[05_security.md](./05_security.md)参照）
+- `server/repositories`層を導入し、`tenantId`（ForeignNational/ResidenceStatusは`client.tenantId`経由）を
+  全関数で強制（[client-repository.ts](../src/server/repositories/client-repository.ts),
+  [foreign-national-repository.ts](../src/server/repositories/foreign-national-repository.ts),
+  [residence-status-repository.ts](../src/server/repositories/residence-status-repository.ts)）
+- 法人情報（Client）・外国人情報（ForeignNational）・在留資格（ResidenceStatus）のCRUD画面
+  （`/clients`, `/clients/new`, `/clients/[clientId]`,
+  `/clients/[clientId]/foreign-nationals/new`, `/clients/[clientId]/foreign-nationals/[id]`）
+- 検索（法人名・外国人氏名・在留カード番号・担当者・在留期限範囲の複合条件、`/clients`）。
+  在留カード番号は暗号化のため完全一致（検索用ハッシュ照合）のみ対応
+- CSVダウンロード（`/api/clients/export`、UTF-8 BOM付き、`src/lib/csv.ts`）。viewerロールは403で拒否
+- Excel一括取込（`/clients/import`）: `exceljs`でシート解析→zodバリデーション→プレビュー表示→
+  確認後にDB保存の2段階フロー（法人名が未登録の場合は自動作成）
+  - `xlsx`(SheetJS)のnpm公開版は既知の脆弱性を含む古いバージョンで止まっているため`exceljs`を採用
+- ロールベースアクセス制御を一覧・詳細・Server Action全てで一貫させる
+  （viewerは作成・更新・削除・ダウンロード・取込が一切できない、docs/01_requirements.md 1.1）
+
+### ブラウザ・実DBでの動作確認（実施済み）
+
+- 顧客の新規作成→詳細ページへ遷移→外国人情報追加→在留資格追加、の一連の登録フローが実DBで成功
+- 在留カード番号を小文字・別表記で検索しても、ハッシュの正規化により完全一致で検索できることを確認
+- CSVダウンロードが暗号化前の平文情報を含む正しい内容で出力されることを確認
+- Excel取込の解析・バリデーション・DB書き込みロジックを実DBに対して直接検証
+  （ブラウザのファイル入力はテスト自動化ツールの制約上直接操作できないが、取込の中核ロジックは検証済み）
+- viewerロールでは「CSVダウンロード」「Excel一括取込」「新規登録」ボタンが表示されないこと、
+  詳細画面が読み取り専用であること、`/clients/new`への直接アクセスが`/clients`へリダイレクトされること、
+  CSV APIへの直接アクセスが403になることを確認
+  - 検証中に、viewerロールでも「新規登録」ボタンが誤表示されるUIバグを発見し修正
+    （Server Action側の権限チェックにより実際の作成は元々ブロックされていたが、UI上の表示崩れがあった）
+
+### 既知の未実装事項
+
+- 監査ログ（`AuditLog`モデルは存在するが、作成・更新・削除・ダウンロード操作の記録はまだ配線していない。
+  ログイン・招待等の認証イベントも含めて横断的な対応が必要なため、専用タスクとして別途実施する）
+- ダッシュボードの期限管理（30日/14日/7日/当日の分類・通知表示）はプレースホルダのまま
+  （Phase4のスコープでは着手せず、後続Phaseで実装予定）
+
+## Phase5 で着手する内容（次工程）
+
+- CSV生成: 入管オンライン提出用の`CsvExportTemplate`（列定義・バージョン管理）を使ったテンプレート機構
+- PDF管理: 添付書類アップロード・ファイル名自動変更・不足書類表示・書類一覧表示

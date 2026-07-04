@@ -20,6 +20,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <span className="text-muted-foreground">
             {session.user.name}（{ROLE_LABEL[session.user.role]}）
           </span>
+          <Link href="/clients" className="underline">
+            顧客管理
+          </Link>
           {session.user.role === UserRole.ADMIN && (
             <Link href="/settings/users" className="underline">
               ユーザー管理

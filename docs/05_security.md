@@ -30,8 +30,10 @@
   2. 各画面（Server Component）でのセッション・ロールチェック（例: `/settings/users` は非adminを`/dashboard`へリダイレクト）
   3. 各Server Actionでの `requireRole()`（[src/server/auth/guards.ts](../src/server/auth/guards.ts)）
      による最終防御。画面のガードを迂回してActionを直接呼んでも権限のないユーザーは`AuthzError`で弾かれる
-- テナント（行政書士事務所単位）をまたいだデータアクセスをアプリケーション層で必ず遮断する
-  （Phase4以降、`repositories`層で`tenantId`スコープを一元的に強制する設計とする）
+- テナント（行政書士事務所単位）をまたいだデータアクセスをアプリケーション層で必ず遮断する。
+  Phase4で`src/server/repositories/`層を導入し、全関数が`tenantId`（`ForeignNational`/
+  `ResidenceStatus`は親`Client.tenantId`経由）を必須引数として強制する設計にした
+  （実装: [client-repository.ts](../src/server/repositories/client-repository.ts) 等）
 - パスワードリセット・招待トークンは生値をDBに保存せずSHA-256ハッシュのみ保存し、
   使用済み・期限切れは再利用不可にする（[src/server/auth/tokens.ts](../src/server/auth/tokens.ts)）
 - パスワードリセット申請はメールアドレスの存在有無に関わらず同じ成功表示を返し、
@@ -60,6 +62,9 @@
   （実行者・日時・対象種別・対象ID・操作種別）
 - 監査ログ自体は改ざん防止のため、アプリケーションからの更新・削除操作を許可しない（追記のみ）
 - 管理者ロールのみ監査ログを閲覧できる
+- **未実装（Phase4時点）**: `AuditLog`モデル自体はPhase2から存在するが、実際の書き込み配線は
+  まだ行っていない。ログイン・招待等の認証イベントも含めて横断的に対応する必要があるため、
+  専用タスクとして別途実施する（[06_roadmap.md](./06_roadmap.md)の既知の未実装事項を参照）
 
 ## 5. バックアップ
 
