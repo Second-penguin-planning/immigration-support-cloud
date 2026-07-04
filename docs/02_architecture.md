@@ -35,6 +35,20 @@
 - `prisma migrate diff --from-empty --to-schema=... --script` を使うと、生きたDB接続なしに
   マイグレーションSQLを生成できる（本プロジェクトの初期マイグレーションもこの方法で作成した）。
 
+### Auth.js v5(beta) 利用時の注意（実装時の注意、Phase3で確認）
+
+- 2026年7月時点でも next-auth の npm `latest` タグは v4系であり、v5は `beta` タグのまま
+  （`5.0.0-beta.31`）。ただしApp Router専用の `auth()`/`signIn()`/`signOut()`/`handlers` を
+  提供するのはv5のみのため、本プロジェクトはv5(beta)を採用している。
+- `next-auth/jwt` の `JWT` 型は内部で `@auth/core/jwt` からの `export *` 再エクスポートに
+  なっており、`declare module 'next-auth/jwt' { interface JWT {...} }` による型拡張が
+  マージされない（`next-auth`本体への`Session`/`User`拡張は正常にマージされる）。
+  そのため `token.role`/`token.tenantId` は [src/server/auth/config.ts](../src/server/auth/config.ts)
+  の `session` コールバック内でキャストして扱っている。
+- Credentials providerはDBセッション戦略と相性が悪いため、`session: { strategy: 'jwt' }` を
+  明示している。`@auth/prisma-adapter` はOAuth向けの機能が中心のため導入せず、
+  ユーザー検索・パスワード照合は自前で実装している。
+
 ## 2. ディレクトリ構成（完成形の設計。各Phaseで段階的に実体を作成する）
 
 ```
@@ -47,21 +61,24 @@ immigration-support-cloud/
 ├── prisma.config.ts             # [Phase2] Prisma CLI設定（接続文字列はここから読む。Prisma7方式）
 ├── public/                      # 静的アセット
 ├── src/
+│   ├── proxy.ts                 # [Phase3] Next.js16のルート保護(旧middleware.ts)
 │   ├── app/                     # Next.js App Router（ルーティングは薄く保つ）
-│   │   ├── (auth)/              # login, password-reset 等の未認証ルートグループ（Phase3）
-│   │   ├── (dashboard)/         # 認証必須の画面群（Phase4〜）
-│   │   │   ├── clients/         # 顧客管理
-│   │   │   ├── reports/         # 定期届出
-│   │   │   ├── documents/       # PDF/書類管理
-│   │   │   └── settings/        # ユーザー・権限設定
-│   │   ├── api/                 # Route Handlers（CSV生成・Webhook等）
+│   │   ├── (auth)/              # [Phase3] login, password-reset, invite の未認証ルートグループ
+│   │   ├── (dashboard)/         # [Phase3〜] 認証必須の画面群
+│   │   │   ├── dashboard/       # [Phase3] ダッシュボード（期限管理等はPhase4以降で拡張）
+│   │   │   ├── settings/users/  # [Phase3] ユーザー・権限管理（管理者のみ）
+│   │   │   ├── clients/         # 顧客管理（Phase4）
+│   │   │   ├── reports/         # 定期届出（Phase7）
+│   │   │   └── documents/       # PDF/書類管理（Phase5）
+│   │   ├── api/auth/[...nextauth]/route.ts  # [Phase3] Auth.jsのRoute Handler
 │   │   ├── layout.tsx
-│   │   └── page.tsx
+│   │   └── page.tsx             # 認証状態に応じて /dashboard へredirect
 │   ├── components/
-│   │   ├── ui/                  # ボタン・入力欄等の共通UIプリミティブ
+│   │   ├── ui/                  # [Phase3] button/input/label/alert等の共通UIプリミティブ
 │   │   └── layout/              # ヘッダー・サイドバー等のアプリシェル
 │   ├── features/                # 機能単位の実装（コンポーネント・hooks・Server Action・validationを同居）
-│   │   ├── auth/
+│   │   ├── auth/                # [Phase3] ログイン・パスワードリセット
+│   │   ├── users/                # [Phase3] ユーザー招待・権限管理
 │   │   ├── clients/
 │   │   ├── csv-export/
 │   │   ├── pdf-documents/
@@ -70,7 +87,8 @@ immigration-support-cloud/
 │   │   └── dashboard/
 │   ├── server/
 │   │   ├── db/                  # [Phase2] Prisma Clientのシングルトン・暗号化拡張（client.ts, encryption.ts, pii-fields.ts）
-│   │   ├── auth/                # Auth.js設定
+│   │   ├── auth/                 # [Phase3] Auth.js設定・検証トークン・RBACガード（config.ts, index.ts, tokens.ts, guards.ts）
+│   │   ├── email/                # [Phase3] メール送信（mailer.ts、SMTP未設定時はログ出力にフォールバック）
 │   │   ├── repositories/        # Prismaを直接叩くデータアクセス層
 │   │   └── services/            # 複数repositoryを組み合わせるドメインロジック
 │   ├── generated/prisma/        # [Phase2] `prisma generate` の出力。gitignore対象・コミットしない

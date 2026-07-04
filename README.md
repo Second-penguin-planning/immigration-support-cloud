@@ -4,7 +4,7 @@
 
 プロジェクトの背景・要件・設計の詳細は [`docs/`](./docs/00_overview.md) を参照。
 
-## 開発方法（Phase2時点）
+## 開発方法（Phase3時点）
 
 前提: Node.js 24系、Docker（PostgreSQLをローカルで動かす場合）
 
@@ -12,8 +12,9 @@
 # 依存パッケージのインストール（postinstallでPrisma Clientも生成される）
 npm install
 
-# 環境変数ファイルを作成（値は適宜書き換える。ENCRYPTION_MASTER_KEYは`openssl rand -base64 32`等で生成）
+# 環境変数ファイルを作成（値は適宜書き換える）
 cp .env.example .env.local
+# ENCRYPTION_MASTER_KEY, AUTH_SECRET は `openssl rand -base64 32` 等で生成した値に置き換える
 
 # ローカルPostgreSQLを起動
 npm run db:up
@@ -28,8 +29,19 @@ npm run db:seed
 npm run dev
 ```
 
-http://localhost:3000 を開いて表示を確認する。
+http://localhost:3000 を開くと `/login` にリダイレクトされる。
 DBの中身は `npm run db:studio` でGUI確認できる。
+
+### ログイン確認用のデモアカウント（`npm run db:seed` で投入される）
+
+| メールアドレス     | パスワード   | 権限     |
+| ------------------ | ------------ | -------- |
+| admin@example.com  | Password123! | 管理者   |
+| staff@example.com  | Password123! | スタッフ |
+| viewer@example.com | Password123! | 閲覧のみ |
+
+メール送信は `EMAIL_SERVER_HOST` が未設定の場合、実際には送信せずサーバーログに
+本文（招待・パスワードリセットのリンク含む）を出力する（[src/server/email/mailer.ts](./src/server/email/mailer.ts)）。
 
 > Prisma 7からは接続文字列を `prisma.config.ts` から読み込み、`PrismaClient`には
 > `@prisma/adapter-pg` のドライバアダプタを渡す方式に変更されている

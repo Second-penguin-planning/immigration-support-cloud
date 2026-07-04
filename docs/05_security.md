@@ -19,14 +19,30 @@
   Environment Variables）で管理する。鍵を紛失すると既存の暗号化データは復号不能になるため、
   鍵のバックアップ・ローテーション手順を本番運用開始（Phase8）までに整備する
 
-## 2. 認証・認可
+## 2. 認証・認可（Phase3で実装）
 
-- メール認証必須（未認証ユーザーはログイン不可）
-- パスワードはハッシュ化（bcrypt/argon2、Auth.js標準に準拠）して保存し、平文を扱わない
-- 二段階認証（TOTP）に対応できる設計とする
-- ロールベースアクセス制御（admin/staff/viewer）をUIだけでなくServer Action/Route Handler側でも必ず検証する
-  （Next.js 16のProxy＝旧Middlewareのみに依存しない。詳細は[02_architecture.md](./02_architecture.md)参照）
+- メール認証必須。`User.emailVerified` が null のアカウントは `authorize()`（
+  [src/server/auth/config.ts](../src/server/auth/config.ts)）でログインを拒否する
+- パスワードはbcryptjsでハッシュ化して保存し、平文を扱わない
+- 二段階認証（TOTP）に対応できる設計とする（MVPでは未実装。将来 `User` に秘密鍵カラムを追加して対応）
+- ロールベースアクセス制御（admin/staff/viewer）を以下の多層で検証する（いずれか単体に依存しない）
+  1. `proxy.ts` の `authorized` コールバック（未認証を`/login`へリダイレクト。ロールまでは見ない）
+  2. 各画面（Server Component）でのセッション・ロールチェック（例: `/settings/users` は非adminを`/dashboard`へリダイレクト）
+  3. 各Server Actionでの `requireRole()`（[src/server/auth/guards.ts](../src/server/auth/guards.ts)）
+     による最終防御。画面のガードを迂回してActionを直接呼んでも権限のないユーザーは`AuthzError`で弾かれる
 - テナント（行政書士事務所単位）をまたいだデータアクセスをアプリケーション層で必ず遮断する
+  （Phase4以降、`repositories`層で`tenantId`スコープを一元的に強制する設計とする）
+- パスワードリセット・招待トークンは生値をDBに保存せずSHA-256ハッシュのみ保存し、
+  使用済み・期限切れは再利用不可にする（[src/server/auth/tokens.ts](../src/server/auth/tokens.ts)）
+- パスワードリセット申請はメールアドレスの存在有無に関わらず同じ成功表示を返し、
+  アカウント存在の列挙を防ぐ
+
+### 既知の未実装事項（Phase3時点）
+
+- **ログイン試行のレート制限は未実装**。ローカル環境の制約でRedis等の共有ストレージが
+  未導入のため、サーバーレス環境でも機能するレート制限（Upstash Redis等）は今後のPhaseで
+  導入する。現状はbcryptのコスト（ハッシュ計算コスト）のみが総当たりへの抑止力になっている
+- 二段階認証（TOTP）は未実装（スキーマ上も未対応。対応時は`User`にsecretカラム追加が必要）
 
 ## 3. Web脆弱性対策
 

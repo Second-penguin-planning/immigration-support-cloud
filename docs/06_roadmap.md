@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Phase1 | 設計（要件定義・アーキテクチャ・データモデル概要・画面設計・セキュリティ方針・開発環境構築） | ✅ 完了 |
 | Phase2 | データベース設計（Prismaスキーマ確定・マイグレーション・シード投入） | ✅ 完了（実DB結合確認済み） |
-| Phase3 | ログイン機能（Auth.js導入・メール認証・パスワードリセット・権限管理） | 未着手 |
+| Phase3 | ログイン機能（Auth.js導入・メール認証・パスワードリセット・権限管理） | ✅ 完了（実DB・ブラウザ動作確認済み） |
 | Phase4 | 顧客管理（法人/外国人/在留資格CRUD・検索・CSVダウンロード・Excel取込） | 未着手 |
 | Phase5 | CSV生成・PDF管理（テンプレート機構・書類アップロード・不足書類表示） | 未着手 |
 | Phase6 | AI補助（OCR・PDF読取・不足項目抽出・誤入力検知・入力候補） | 未着手 |
@@ -51,9 +51,44 @@ npm run db:seed        # サンプルデータ投入 成功
 - Prisma Client（`src/server/db/client.ts`）経由での読み取りでは `passportNumber` が元の平文
   （`N1234567`）に復号されて返ることを確認（暗号化・復号の往復が実DBで正しく機能）
 
-## Phase3 で着手する内容（次工程）
+## Phase3 完了内容
 
-- Auth.js導入（Credentials provider、JWTセッション戦略を想定）
-- メール認証・パスワードリセット（`VerificationToken`モデルを使用）の実装
-- ロールベースアクセス制御（admin/staff/viewer）をProxy(`proxy.ts`)とServer Action双方で実装
-- ログイン・認可の単体/結合テスト
+- Auth.js v5(beta.31) 導入。Credentials provider + JWTセッション戦略
+  （[src/server/auth/config.ts](../src/server/auth/config.ts), [index.ts](../src/server/auth/index.ts)）
+- メール認証必須のログイン（`emailVerified`/`isActive`を`authorize()`で検証）
+- `src/proxy.ts`: Next.js16の新規約でルート保護（未認証を`/login`へリダイレクト）
+- `src/server/auth/guards.ts`: `requireSession`/`requireRole`によるServer Action側の多層防御
+- `src/server/auth/tokens.ts`: メール認証・パスワードリセット用トークン発行/検証（ハッシュ化保存、有効期限、使い捨て）
+- `src/server/email/mailer.ts`: メール送信（SMTP未設定時はログ出力にフォールバックする開発用動線）
+- 画面: `/login`, `/password-reset`, `/password-reset/[token]`, `/invite/[token]`,
+  `/dashboard`, `/settings/users`（管理者によるユーザー招待・権限変更・有効/無効切替）
+- 最小限のUIプリミティブ（`src/components/ui/`: button, input, label, alert, field-error）
+- Next.js16(`proxy.ts`)・Prisma7に続き、Auth.js v5(beta)固有の型拡張の癖を確認し
+  [02_architecture.md](./02_architecture.md)に記録
+
+### ブラウザでの動作確認（実施済み）
+
+Docker上の実DBに対し、開発サーバーで以下を確認した。
+
+- 未ログインで`/dashboard`に直接アクセス→`/login?callbackUrl=...`へリダイレクト（proxy.ts）
+- 管理者(`admin@example.com`)でログイン→ダッシュボード表示、「ユーザー管理」リンク表示
+- 誤ったパスワードでのログイン→汎用エラーメッセージ表示
+- 管理者による新規ユーザー招待→メール送信ログに招待リンク出力→リンクからパスワード設定→
+  `emailVerified`が設定されアカウント有効化→新規ユーザーでログイン成功
+- STAFFロールでは「ユーザー管理」リンク非表示、`/settings/users`への直接アクセスも
+  `/dashboard`へリダイレクト（ページレベルRBAC）
+- パスワードリセット申請→メール送信ログにリセットリンク出力→リンクから新パスワード設定→
+  新パスワードでログイン成功
+- ログアウト→`/login`へリダイレクト
+
+### 既知の未実装事項
+
+- ログイン試行のレート制限（[05_security.md](./05_security.md)参照。Redis等導入後に対応）
+- 二段階認証（TOTP）
+
+## Phase4 で着手する内容（次工程）
+
+- 顧客管理: 法人情報（Client）・外国人情報（ForeignNational）・在留資格（ResidenceStatus）のCRUD画面
+- 検索（法人名・氏名・在留カード番号・期限範囲・担当者の複合条件）とCSVダウンロード
+- Excelアップロードによる一括取込（自動解析・エラー表示）
+- `server/repositories`層の導入（`tenantId`スコープを一元的に強制する設計、[05_security.md](./05_security.md)参照）
