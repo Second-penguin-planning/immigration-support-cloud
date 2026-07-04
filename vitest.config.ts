@@ -9,6 +9,10 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    env: {
+      // テスト専用の固定鍵（32byteをbase64化）。本番運用の鍵とは無関係。
+      ENCRYPTION_MASTER_KEY: Buffer.alloc(32, 7).toString('base64'),
+    },
     setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     coverage: {

@@ -22,14 +22,29 @@
   必ず認可チェックを行う（Proxyのmatcher変更で意図せず保護が外れるリスクへの対策）。
 - Turbopackがデフォルトビルドツールになっている。
 
+### Prisma 7 における主要な破壊的変更（実装時の注意、Phase2で確認）
+
+- `schema.prisma` の `datasource` に `url` を直接書く方式は廃止。接続文字列は
+  プロジェクトルートの `prisma.config.ts` から読み込む（`dotenv/config` で `.env` を読み込み）。
+- `PrismaClient` は `@prisma/adapter-pg` 等のドライバアダプタを明示的に渡して生成する
+  （`new PrismaClient({ adapter: new PrismaPg({ connectionString }) })`）。詳細は
+  [src/server/db/client.ts](../src/server/db/client.ts)。
+- `generator client` の `provider` は `prisma-client-js` ではなく `prisma-client` を使い、
+  `output` （本プロジェクトでは `src/generated/prisma`）を明示する。生成物はコミットせず
+  `npm install` 後の `postinstall`（`prisma generate`）で都度生成する。
+- `prisma migrate diff --from-empty --to-schema=... --script` を使うと、生きたDB接続なしに
+  マイグレーションSQLを生成できる（本プロジェクトの初期マイグレーションもこの方法で作成した）。
+
 ## 2. ディレクトリ構成（完成形の設計。各Phaseで段階的に実体を作成する）
 
 ```
 immigration-support-cloud/
 ├── docs/                        # 設計ドキュメント（本ディレクトリ）
-├── prisma/                      # Prisma schema・migration（Phase2で作成）
+├── prisma/                      # [Phase2] Prisma schema・migration・seed
 │   ├── schema.prisma
+│   ├── seed.ts
 │   └── migrations/
+├── prisma.config.ts             # [Phase2] Prisma CLI設定（接続文字列はここから読む。Prisma7方式）
 ├── public/                      # 静的アセット
 ├── src/
 │   ├── app/                     # Next.js App Router（ルーティングは薄く保つ）
@@ -54,10 +69,11 @@ immigration-support-cloud/
 │   │   ├── ai-assist/
 │   │   └── dashboard/
 │   ├── server/
-│   │   ├── db/                  # Prisma Clientのシングルトン
+│   │   ├── db/                  # [Phase2] Prisma Clientのシングルトン・暗号化拡張（client.ts, encryption.ts, pii-fields.ts）
 │   │   ├── auth/                # Auth.js設定
 │   │   ├── repositories/        # Prismaを直接叩くデータアクセス層
 │   │   └── services/            # 複数repositoryを組み合わせるドメインロジック
+│   ├── generated/prisma/        # [Phase2] `prisma generate` の出力。gitignore対象・コミットしない
 │   ├── lib/                     # 汎用ユーティリティ（cn, logger, date, csv, file-naming等）
 │   ├── types/                   # プロジェクト共通の型定義
 │   └── config/                  # サイト定数・ナビゲーション定義・feature flag

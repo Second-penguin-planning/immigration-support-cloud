@@ -5,7 +5,7 @@
 | Phase | 内容 | 状態 |
 | --- | --- | --- |
 | Phase1 | 設計（要件定義・アーキテクチャ・データモデル概要・画面設計・セキュリティ方針・開発環境構築） | ✅ 完了 |
-| Phase2 | データベース設計（Prismaスキーマ確定・マイグレーション・シード投入） | 未着手 |
+| Phase2 | データベース設計（Prismaスキーマ確定・マイグレーション・シード投入） | ✅ 完了（ローカルDB未接続のためマイグレーション未適用、下記参照） |
 | Phase3 | ログイン機能（Auth.js導入・メール認証・パスワードリセット・権限管理） | 未着手 |
 | Phase4 | 顧客管理（法人/外国人/在留資格CRUD・検索・CSVダウンロード・Excel取込） | 未着手 |
 | Phase5 | CSV生成・PDF管理（テンプレート機構・書類アップロード・不足書類表示） | 未着手 |
@@ -22,10 +22,38 @@
 - `.env.example` によるアプリ設定項目の明文化
 - 設計ドキュメント一式（本ディレクトリ `docs/`）
 
-## Phase2 で着手する内容（次工程）
+## Phase2 完了内容
 
-- `prisma` 導入、`schema.prisma` の作成（[03_data_model.md](./03_data_model.md)を具体化）
-- マルチテナント・監査ログ・暗号化対象カラムの実装方針確定
-- マイグレーション実行とシードデータ投入
-- `src/server/db` にPrisma Clientシングルトンを実装
-- リポジトリ層のユニットテスト方針策定
+- Prisma 7 導入、`prisma/schema.prisma` 確定（[03_data_model.md](./03_data_model.md)の12モデルを実装）
+  - Tenant / User / VerificationToken / Client / ForeignNational / ResidenceStatus /
+    Document / PeriodicReport / Interview / SupportRecord / CsvExportTemplate / AuditLog / Notification
+- マルチテナント（`tenantId`によるスコープ）、監査ログ（追記専用の想定）、
+  旅券番号・在留カード番号の暗号化対象カラム＋検索用ハッシュ列を実装
+- `src/server/db/encryption.ts`（AES-256-GCM暗号化、HKDFによる鍵分離、HMAC-SHA256の検索用ハッシュ）と
+  `src/server/db/pii-fields.ts`（Prisma書き込み/読み取りペイロードの暗号化・復号変換、ユニットテスト付き）
+- `src/server/db/client.ts`: Prisma Client Extensionで`foreignNational`モデルへの暗号化・復号を透過化
+- `prisma/seed.ts`: テナント・3ロールのユーザー・顧客・外国人・在留資格・CSVテンプレートのサンプルデータ
+- 初期マイグレーション（`prisma/migrations/20260705000000_init`）を
+  `prisma migrate diff --from-empty --to-schema=... --script` でオフライン生成・レビュー済み
+
+### 既知の制約（本開発環境の事情）
+
+作業環境にDocker/ローカルPostgreSQLが無かったため、マイグレーションの実DB適用・シード実行・
+Prisma Client拡張の実DB結合テストは未実施。スキーマ検証（`prisma validate`）・型生成
+（`prisma generate`）・暗号化ロジックの単体テスト（Vitest）は実施済み。
+DB接続が可能になった時点で、以下を実行して結合確認を行うこと。
+
+```bash
+npm run db:up        # Docker Postgresを起動する場合
+npm run db:deploy     # prisma/migrations の履歴を適用
+npm run db:seed        # サンプルデータ投入
+npm run db:studio      # 投入結果の確認
+```
+
+## Phase3 で着手する内容（次工程）
+
+- Auth.js導入（Credentials provider、JWTセッション戦略を想定）
+- メール認証・パスワードリセット（`VerificationToken`モデルを使用）の実装
+- ロールベースアクセス制御（admin/staff/viewer）をProxy(`proxy.ts`)とServer Action双方で実装
+- ログイン・認可の単体/結合テスト
+- 上記「既知の制約」のDB結合確認をPhase3着手前後で解消する

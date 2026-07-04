@@ -43,6 +43,7 @@ next-env.d.ts
 
 # prisma
 /prisma/generated
+/src/generated
 
 # local file storage (uploaded PDFs, generated CSVs during dev)
 /uploads

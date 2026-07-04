@@ -6,9 +6,18 @@
 ## 1. 個人情報の暗号化
 
 - 通信経路: TLS必須（Vercel/HTTPS）。ローカル開発でもDBは信頼できるネットワーク内のみで公開する
-- 保存時: 旅券番号・在留カード番号等の機微度が高いカラムはアプリケーション層で暗号化して保存する
-  （Prismaのミドルウェア/カスタムフィールドで暗号化・復号を透過的に行う方針。詳細はPhase2で設計）
-- 暗号鍵はコード・リポジトリに含めず、環境変数（Vercelの場合はEnvironment Variables）で管理する
+- 保存時: 旅券番号・在留カード番号はアプリケーション層でAES-256-GCM暗号化して保存する。
+  Prisma Client Extension（`src/server/db/client.ts`）で `foreignNational` モデルへの
+  書き込み・読み取りに対して暗号化・復号を透過的に適用し、アプリケーションコード（features/server層）は
+  常に平文として扱える（実装: [src/server/db/encryption.ts](../src/server/db/encryption.ts),
+  [src/server/db/pii-fields.ts](../src/server/db/pii-fields.ts)）
+- 暗号化は非決定的（IVがランダム）なため暗号文のまま検索・重複チェックができない。
+  そのため完全一致検索用に別カラム（`passportNumberHash`等）へHMAC-SHA256の一方向ハッシュを保持する
+  （ブラインドインデックス方式）
+- 暗号化用の鍵とハッシュ用の鍵は同一のマスターキーからHKDFで用途別に導出し、鍵を使い回さない
+- 暗号鍵（`ENCRYPTION_MASTER_KEY`）はコード・リポジトリに含めず、環境変数（Vercelの場合は
+  Environment Variables）で管理する。鍵を紛失すると既存の暗号化データは復号不能になるため、
+  鍵のバックアップ・ローテーション手順を本番運用開始（Phase8）までに整備する
 
 ## 2. 認証・認可
 

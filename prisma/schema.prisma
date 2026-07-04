@@ -1,0 +1,309 @@
+// Immigration Support Cloud - Prisma Schema
+// 概念モデルは docs/03_data_model.md を参照。本ファイルはその具体化。
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+enum UserRole {
+  ADMIN
+  STAFF
+  VIEWER
+}
+
+enum VerificationTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+enum PeriodicReportStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  VIEW
+  DOWNLOAD
+}
+
+// =============================================================================
+// テナント・ユーザー・認証
+// =============================================================================
+
+/// サービス契約単位（行政書士事務所・登録支援機関等）。全ての業務データはこの単位で分離される。
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users              User[]
+  clients            Client[]
+  csvExportTemplates CsvExportTemplate[]
+  auditLogs          AuditLog[]
+
+  @@map("tenants")
+}
+
+/// ログインユーザー。
+model User {
+  id            String    @id @default(cuid())
+  tenantId      String    @map("tenant_id")
+  email         String    @unique
+  name          String
+  passwordHash  String?   @map("password_hash")
+  role          UserRole  @default(STAFF)
+  emailVerified DateTime? @map("email_verified")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedClients Client[]         @relation("ClientAssignedUser")
+  documentUploads Document[]
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  createdReports  PeriodicReport[]
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+/// メール認証・パスワードリセット用トークン（ハッシュ化して保存し、平文トークンはメール送信時のみ扱う）。
+model VerificationToken {
+  id         String                @id @default(cuid())
+  identifier String                @map("identifier") // 対象のメールアドレス
+  tokenHash  String                @unique @map("token_hash")
+  type       VerificationTokenType
+  expiresAt  DateTime              @map("expires_at")
+  usedAt     DateTime?             @map("used_at")
+  createdAt  DateTime              @default(now()) @map("created_at")
+
+  @@index([identifier, type])
+  @@map("verification_tokens")
+}
+
+// =============================================================================
+// 顧客管理（法人・外国人・在留資格）
+// =============================================================================
+
+/// 受入企業の法人情報（Tenantが管理する「顧客」）。
+model Client {
+  id             String   @id @default(cuid())
+  tenantId       String   @map("tenant_id")
+  companyName    String   @map("company_name")
+  address        String?
+  contactName    String?  @map("contact_name")
+  contactEmail   String?  @map("contact_email")
+  contactPhone   String?  @map("contact_phone")
+  assignedUserId String?  @map("assigned_user_id")
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedUser     User?             @relation("ClientAssignedUser", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  foreignNationals ForeignNational[]
+
+  @@index([tenantId])
+  @@index([tenantId, companyName])
+  @@map("clients")
+}
+
+/// 外国人情報。旅券番号・在留カード番号は暗号化して保存する（詳細は src/server/db/encryption.ts）。
+/// 検索・一致判定用に、暗号化と別に一方向ハッシュ列(*Hash)を保持する（暗号文は非決定的なため直接検索できないため）。
+model ForeignNational {
+  id                      String    @id @default(cuid())
+  clientId                String    @map("client_id")
+  fullName                String    @map("full_name")
+  fullNameKana            String?   @map("full_name_kana")
+  nationality             String
+  birthDate               DateTime? @map("birth_date") @db.Date
+  passportNumber          String?   @map("passport_number") // 暗号文
+  passportNumberHash      String?   @map("passport_number_hash")
+  residenceCardNumber     String?   @map("residence_card_number") // 暗号文
+  residenceCardNumberHash String?   @map("residence_card_number_hash")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  client            Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  residenceStatuses ResidenceStatus[]
+  documents         Document[]
+  periodicReports   PeriodicReport[]
+
+  @@index([clientId])
+  @@index([passportNumberHash])
+  @@index([residenceCardNumberHash])
+  @@map("foreign_nationals")
+}
+
+/// 在留資格の履歴（1名につき複数保持できる）。
+model ResidenceStatus {
+  id                String    @id @default(cuid())
+  foreignNationalId String    @map("foreign_national_id")
+  statusType        String    @map("status_type") // 例: 技術・人文知識・国際業務, 特定技能1号 等
+  permitNumber      String?   @map("permit_number")
+  grantedAt         DateTime? @map("granted_at") @db.Date
+  expiresAt         DateTime  @map("expires_at") @db.Date
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  foreignNational ForeignNational @relation(fields: [foreignNationalId], references: [id], onDelete: Cascade)
+
+  @@index([foreignNationalId])
+  @@index([expiresAt])
+  @@map("residence_statuses")
+}
+
+// =============================================================================
+// 書類管理
+// =============================================================================
+
+/// 添付書類（PDF/画像）。ファイル名はアップロード時に規則的な名前へ自動変更する（Phase5で実装）。
+model Document {
+  id                String   @id @default(cuid())
+  foreignNationalId String   @map("foreign_national_id")
+  documentType      String   @map("document_type")
+  originalFileName  String   @map("original_file_name")
+  storedFileName    String   @map("stored_file_name")
+  storagePath       String   @map("storage_path")
+  mimeType          String   @map("mime_type")
+  fileSize          Int      @map("file_size")
+  uploadedByUserId  String?  @map("uploaded_by_user_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  foreignNational ForeignNational @relation(fields: [foreignNationalId], references: [id], onDelete: Cascade)
+  uploadedBy      User?           @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([foreignNationalId])
+  @@map("documents")
+}
+
+// =============================================================================
+// 定期届出
+// =============================================================================
+
+/// 特定技能定期届出のドラフト・提出履歴。
+model PeriodicReport {
+  id                String               @id @default(cuid())
+  foreignNationalId String               @map("foreign_national_id")
+  reportPeriod      String               @map("report_period") // 例: "2026-Q3"
+  status            PeriodicReportStatus @default(DRAFT)
+  basedOnReportId   String?              @map("based_on_report_id") // 前回データのコピー元
+  submittedAt       DateTime?            @map("submitted_at")
+  createdByUserId   String?              @map("created_by_user_id")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  foreignNational ForeignNational  @relation(fields: [foreignNationalId], references: [id], onDelete: Cascade)
+  basedOnReport   PeriodicReport?  @relation("ReportHistory", fields: [basedOnReportId], references: [id], onDelete: SetNull)
+  copiedInto      PeriodicReport[] @relation("ReportHistory")
+  createdBy       User?            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  interviews      Interview[]
+  supportRecords  SupportRecord[]
+
+  @@index([foreignNationalId])
+  @@map("periodic_reports")
+}
+
+/// 面談記録。
+model Interview {
+  id               String   @id @default(cuid())
+  periodicReportId String   @map("periodic_report_id")
+  conductedAt      DateTime @map("conducted_at") @db.Date
+  conductedBy      String   @map("conducted_by")
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  periodicReport PeriodicReport @relation(fields: [periodicReportId], references: [id], onDelete: Cascade)
+
+  @@index([periodicReportId])
+  @@map("interviews")
+}
+
+/// 支援実施状況（生活オリエンテーション・日本語学習支援 等）。
+model SupportRecord {
+  id               String    @id @default(cuid())
+  periodicReportId String    @map("periodic_report_id")
+  supportType      String    @map("support_type")
+  implemented      Boolean   @default(false)
+  implementedAt    DateTime? @map("implemented_at") @db.Date
+  notes            String?   @db.Text
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  periodicReport PeriodicReport @relation(fields: [periodicReportId], references: [id], onDelete: Cascade)
+
+  @@index([periodicReportId])
+  @@map("support_records")
+}
+
+// =============================================================================
+// CSV出力テンプレート
+// =============================================================================
+
+/// 入管オンライン提出用CSVの列定義。バージョン管理し、過去分の再出力にも対応する。
+model CsvExportTemplate {
+  id               String   @id @default(cuid())
+  tenantId         String   @map("tenant_id")
+  name             String
+  version          Int      @default(1)
+  columnDefinition Json     @map("column_definition")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name, version])
+  @@map("csv_export_templates")
+}
+
+// =============================================================================
+// 監査ログ・通知
+// =============================================================================
+
+/// 個人情報の作成・更新・削除・閲覧・ダウンロードの記録。追記のみ（更新・削除はアプリケーションから行わない）。
+model AuditLog {
+  id         String      @id @default(cuid())
+  tenantId   String      @map("tenant_id")
+  userId     String?     @map("user_id")
+  action     AuditAction
+  targetType String      @map("target_type")
+  targetId   String      @map("target_id")
+  metadata   Json?
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
+/// 期限通知等のアプリ内通知。
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  type      String
+  message   String
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
