@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Immigration Support Cloud（仮称）
 
-## Getting Started
+行政書士・登録支援機関・受入企業向けの、入管オンライン申請・特定技能定期届出業務効率化クラウドサービス。
 
-First, run the development server:
+プロジェクトの背景・要件・設計の詳細は [`docs/`](./docs/00_overview.md) を参照。
+
+## 開発方法（Phase1時点）
+
+前提: Node.js 24系、Docker（PostgreSQLをローカルで動かす場合）
 
 ```bash
+# 依存パッケージのインストール
+npm install
+
+# 環境変数ファイルを作成（値は適宜書き換える）
+cp .env.example .env.local
+
+# 開発サーバー起動
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+http://localhost:3000 を開いて表示を確認する。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## よく使うコマンド
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| コマンド                | 内容                             |
+| ----------------------- | -------------------------------- |
+| `npm run dev`           | 開発サーバー起動                 |
+| `npm run build`         | 本番ビルド                       |
+| `npm run lint`          | ESLint実行                       |
+| `npm run typecheck`     | TypeScript型チェック             |
+| `npm run format`        | Prettierで整形                   |
+| `npm run format:check`  | Prettierの整形チェックのみ       |
+| `npm run test`          | Vitestでユニットテスト実行       |
+| `npm run test:watch`    | Vitestをwatchモードで実行        |
+| `npm run test:coverage` | カバレッジ付きでテスト実行       |
+| `npm run db:up`         | ローカルPostgreSQL(Docker)を起動 |
+| `npm run db:down`       | ローカルPostgreSQL(Docker)を停止 |
 
-## Learn More
+## 開発フェーズ
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Phase1（設計）〜Phase8（本番公開）まで段階的に開発する。
+進捗と各フェーズの内容は [`docs/06_roadmap.md`](./docs/06_roadmap.md) を参照。
