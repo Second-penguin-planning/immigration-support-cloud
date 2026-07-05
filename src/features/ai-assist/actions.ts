@@ -12,7 +12,7 @@ import {
   updateForeignNational,
 } from '@/server/repositories/foreign-national-repository';
 import { createResidenceStatus } from '@/server/repositories/residence-status-repository';
-import { readStoredFile } from '@/server/storage/local-storage';
+import { readStoredFile } from '@/server/storage';
 import type { ExtractedFields } from './schema';
 
 export interface ExtractState {

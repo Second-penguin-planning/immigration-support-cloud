@@ -17,7 +17,7 @@
 - 暗号化用の鍵とハッシュ用の鍵は同一のマスターキーからHKDFで用途別に導出し、鍵を使い回さない
 - 暗号鍵（`ENCRYPTION_MASTER_KEY`）はコード・リポジトリに含めず、環境変数（Vercelの場合は
   Environment Variables）で管理する。鍵を紛失すると既存の暗号化データは復号不能になるため、
-  鍵のバックアップ・ローテーション手順を本番運用開始（Phase8）までに整備する
+  鍵のバックアップ方針を整備した（[07_deployment.md](./07_deployment.md)4節）
 
 ## 2. 認証・認可（Phase3で実装）
 
@@ -69,7 +69,9 @@
 ## 5. バックアップ
 
 - PostgreSQLの日次バックアップを取得し、一定期間保持する
-- リストア手順をドキュメント化し、定期的に復元テストを行う（本番公開前のPhase8で整備）
+- リストア手順をドキュメント化し、定期的に復元テストを行う
+  （[07_deployment.md](./07_deployment.md)5節。バックアップ・リストアスクリプトは
+  [scripts/backup-db.sh](../scripts/backup-db.sh) / [scripts/restore-db.sh](../scripts/restore-db.sh)）
 
 ## 6. 運用上の注意
 

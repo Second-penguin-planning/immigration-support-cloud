@@ -21,7 +21,7 @@ import {
   deleteStoredFile,
   sanitizeFileNameComponent,
   saveFile,
-} from '@/server/storage/local-storage';
+} from '@/server/storage';
 
 export interface ActionState {
   error?: string;

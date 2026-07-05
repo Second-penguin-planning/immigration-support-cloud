@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { UserRole } from '@/generated/prisma/enums';
 import { auth } from '@/server/auth';
 import { findDocumentById } from '@/server/repositories/document-repository';
-import { readStoredFile } from '@/server/storage/local-storage';
+import { readStoredFile } from '@/server/storage';
 
 export async function GET(
   _request: Request,
