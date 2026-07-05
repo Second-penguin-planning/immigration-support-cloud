@@ -58,3 +58,6 @@ next-env.d.ts
 # vitest / coverage
 /coverage
 *.local
+
+.vercel
+.env*

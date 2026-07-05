@@ -1,9 +1,32 @@
 # 本番デプロイ・バックアップ運用（Phase8）
 
 本ドキュメントはVercelへの本番デプロイ手順と、PostgreSQLのバックアップ・リストア運用をまとめる。
-実際のデプロイ実行（Vercelアカウントでの操作、本番DB・本番S3バケットの契約等）はユーザー自身の
-環境・認証情報が必要なため、本Phaseでは手順・スクリプト・設定の整備までを行い、実際の本番環境への
-デプロイ実行はユーザーが行う。
+
+## 0. 実施済みのデプロイ状況
+
+- **公開URL**: https://immigration-support-cloud.vercel.app
+- **GitHubリポジトリ**: https://github.com/Second-penguin-planning/immigration-support-cloud （公開）
+- **Vercelプロジェクト**: `second-penguin-s-projects/immigration-support-cloud`
+- **DB**: VercelマーケットプレイスからNeon PostgreSQL（`isc-prod-db`）を作成・接続済み。
+  マイグレーション（`prisma migrate deploy`）を適用済み
+- 初期管理者アカウント（`info@second-penguin.com`）を作成済み。パスワードは初回発行時に
+  1回だけ共有済みのため、**ログイン後すみやかにパスワードを変更すること**（パスワード変更・
+  再発行UIは現状無いため、変更が必要な場合は`/password-reset`からリセットする）
+- ログイン→ダッシュボード表示までの疎通を実際にHTTPリクエストで確認済み
+
+### 未設定・今後の対応が必要な項目
+
+以下はユーザーが実際の契約・認証情報を用意していないため未設定。設定するまでは該当機能が使えない
+（設定してもコード変更は不要。Vercelの環境変数を追加して再デプロイするだけでよい）。
+
+- **ANTHROPIC_API_KEY未設定**: AI補助機能は「APIキー未設定」エラー表示のまま
+- **SMTP未設定**: ユーザー招待・パスワードリセットメールは実際には送信されず、Vercelの関数ログに
+  出力されるのみ（`EMAIL_SERVER_HOST`等を設定すると解消）
+- **S3未設定（`FILE_STORAGE_DRIVER=local`のまま、`FILE_STORAGE_LOCAL_DIR=/tmp/uploads`に暫定設定）**:
+  Vercelのサーバーレス環境では`/tmp`もリクエスト間・インスタンス間で永続化されないため、
+  **書類アップロード機能は本番では実質的に使用できない**状態。3節の手順でS3に切り替えるまでの暫定措置
+- **バックアップの自動日次実行は未設定**（5節参照。手動実行のスクリプトのみ整備済み）
+- 監査ログ・レート制限・二段階認証は引き続き未実装（[06_roadmap.md](./06_roadmap.md)参照）
 
 ## 1. 事前準備（本番用の外部サービス）
 
