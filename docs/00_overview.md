@@ -53,3 +53,5 @@ Immigration Support Cloud（仮称）
 | [04_screens.md](./04_screens.md) | 画面一覧・画面遷移 |
 | [05_security.md](./05_security.md) | セキュリティ設計方針 |
 | [06_roadmap.md](./06_roadmap.md) | フェーズ計画・進捗管理 |
+| [07_deployment.md](./07_deployment.md) | 本番デプロイ・バックアップ運用手順 |
+| [08_user_guide.md](./08_user_guide.md) | 利用者向けシステムガイドライン（目的・使い方・留意事項・プライバシーポリシー概要） |
