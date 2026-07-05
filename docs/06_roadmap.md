@@ -9,7 +9,7 @@
 | Phase3 | ログイン機能（Auth.js導入・メール認証・パスワードリセット・権限管理） | ✅ 完了（実DB・ブラウザ動作確認済み） |
 | Phase4 | 顧客管理（法人/外国人/在留資格CRUD・検索・CSVダウンロード・Excel取込） | ✅ 完了（実DB・ブラウザ動作確認済み） |
 | Phase5 | CSV生成・PDF管理（テンプレート機構・書類アップロード・不足書類表示） | ✅ 完了（実DB・ブラウザ動作確認済み） |
-| Phase6 | AI補助（OCR・PDF読取・不足項目抽出・誤入力検知・入力候補） | 未着手 |
+| Phase6 | AI補助（OCR・PDF読取・不足項目抽出・誤入力検知・入力候補） | ✅ 完了（コード・単体テスト済み。ブラウザ動作確認は環境要因により未実施、下記参照） |
 | Phase7 | 定期届出（前回データコピー・差分入力・面談記録・支援実施状況） | 未着手 |
 | Phase8 | 本番公開（Vercelデプロイ・バックアップ運用・復元テスト） | 未着手 |
 
@@ -165,8 +165,58 @@ Docker上の実DBに対し、開発サーバーで以下を確認した。
 - ローカルファイルストレージの動的パス解決について、Next.jsのビルド時ファイルトレーサーから
   advisory警告が出るが、ビルド自体は成功する（[02_architecture.md](./02_architecture.md)に記録）
 
-## Phase6 で着手する内容（次工程）
+## Phase6 完了内容
 
-- AI補助: OCR・PDF読取による不足項目抽出、誤入力検知、入力候補表示
-- Anthropic Claudeを既定プロバイダとし、AIの提案は必ず人間の確認を挟んでからDB保存する方針
-  （[02_architecture.md](./02_architecture.md)参照）
+- Anthropicクライアント（[src/server/ai/client.ts](../src/server/ai/client.ts)）: `ANTHROPIC_API_KEY`未設定
+  （プレースホルダのまま）の場合は`isAiConfigured()`がfalseを返し、AI機能呼び出し時に日本語の
+  設定案内エラーを投げる（本番運用時はキー設定が必須）
+- 書類画像/PDFからの項目抽出（[src/server/ai/extract-document.ts](../src/server/ai/extract-document.ts)）:
+  Claude（`claude-sonnet-5`）に書類のbase64を渡し、氏名・フリガナ・国籍・生年月日・旅券番号・
+  在留カード番号・在留資格・在留期限をJSONで抽出させ、zodスキーマ
+  （[src/features/ai-assist/schema.ts](../src/features/ai-assist/schema.ts)）で検証してから返す
+  （AIの出力はそのまま信用せず必ず構造検証する方針、[05_security.md](./05_security.md)参照）
+- 抽出結果の取込Server Action（[src/features/ai-assist/actions.ts](../src/features/ai-assist/actions.ts)）:
+  抽出結果は即DB保存せず、ユーザーがチェックボックスで取り込む項目を選択・確認したうえで
+  外国人情報（および在留資格が両方揃っていれば新規在留資格）に反映する2段階フロー
+- 外国人詳細画面にAI補助セクションを統合（`canEdit`ロールのみ表示、viewerには非表示）
+- ルールベースの誤入力検知（[src/lib/anomaly-detection.ts](../src/lib/anomaly-detection.ts)）:
+  生年月日が未来、在留資格の許可年月日が在留期限より後/生年月日より前、在留期限切れ、
+  旅券番号・在留カード番号の桁数不足を検出。AIを使わない決定的なルールのため、
+  全ロール（viewer含む）に「入力内容のチェック」として常時表示
+
+### テスト・動作確認
+
+- 単体テスト: `extractedFieldsSchema`のバリデーション、`detectAnomalies`の全分岐
+  （生年月日未来・順序矛盾・期限切れ・桁数不足・null項目のスキップ等）を追加し、
+  プロジェクト全体で70件のテストが全て成功（`npm run test`）
+- `npm run typecheck` / `npm run lint` / `npm run build` は全て成功
+- ブラウザ・実DBでの動作確認は**未実施**（下記「既知の制約」参照）。設計上の妥当性は
+  単体テストとコードレビューで担保しているが、実際のログイン→画面遷移→AI補助UIの
+  表示確認は次回Docker環境が復旧した際に実施する
+
+### 既知の制約
+
+- **ローカルDocker Desktop環境の不具合によりブラウザ動作確認が未実施**:
+  このマシンのDocker Desktopで、起動時に内部サービス（Inference manager / Secrets Engine）が
+  自身のUnixソケットブリッジ用シンボリックリンク（例:
+  `C:\Users\<user>\AppData\Local\Docker\run\dockerInference`）を削除できず
+  （`The file cannot be accessed by the system`）起動に失敗する現象が再現する。
+  プロセスの再起動・WSL再起動・該当フォルダの退避（一時的にのみ有効）・
+  設定ファイル（`EnableDockerAI`）の変更・PC再起動・Docker Desktop自体の
+  「Reset to factory defaults」を試みたが解消せず、同一エラーが再発するため
+  このマシン固有のDocker Desktop不具合と判断し、これ以上の対症療法は行わないこととした。
+  Phase4/5で確立した「実DBに対する直接スクリプト検証」の方針をPhase6でも継続する予定だったが、
+  今回はDBコンテナ自体が起動できないため単体テストのみで代替した
+- 実際のAnthropic APIキーが未設定のため、AI抽出機能の実際の呼び出し（Claudeへのリクエスト・
+  レスポンス）は本セッションでは検証できていない。`isAiConfigured()`によるフォールバック
+  （未設定時のエラーメッセージ表示）のロジックは単体テスト・コードレビューで確認済み
+- 抽出結果の自動反映は「氏名・フリガナ・国籍・生年月日・旅券番号・在留カード番号」と
+  「在留資格・在留期限」の2グループに分かれており、在留資格側は両方揃った場合のみ
+  新規`ResidenceStatus`レコードを作成する（片方のみの取込では在留資格は更新されない）
+
+## Phase7 で着手する内容（次工程）
+
+- 定期届出: 前回データのコピー・差分入力、面談記録、支援実施状況の管理
+- Docker環境が復旧した場合は、Phase6のブラウザ動作確認（管理者ログイン→外国人詳細で
+  AI補助セクション表示・APIキー未設定エラー表示・誤入力検知表示→viewerロールでAI補助非表示）
+  を先行して実施し、本ドキュメントの「既知の制約」を更新する

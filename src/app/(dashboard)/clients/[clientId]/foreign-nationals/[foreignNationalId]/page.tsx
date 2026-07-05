@@ -3,6 +3,8 @@ import { notFound, redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { DocumentList } from '@/features/documents/document-list';
 import { UploadDocumentForm } from '@/features/documents/upload-document-form';
+import { AiAssistSection } from '@/features/ai-assist/ai-assist-section';
+import { AnomalyList } from '@/features/ai-assist/anomaly-list';
 import {
   deleteForeignNationalAction,
   updateForeignNationalAction,
@@ -89,6 +91,18 @@ export default async function ForeignNationalDetailPage({
       </div>
 
       <div className="space-y-4">
+        <h2 className="text-lg font-semibold">入力内容のチェック</h2>
+        <AnomalyList
+          input={{
+            birthDate: foreignNational.birthDate,
+            passportNumber: foreignNational.passportNumber,
+            residenceCardNumber: foreignNational.residenceCardNumber,
+            residenceStatuses: foreignNational.residenceStatuses,
+          }}
+        />
+      </div>
+
+      <div className="space-y-4">
         <h2 className="text-lg font-semibold">添付書類</h2>
         {canEdit && (
           <UploadDocumentForm clientId={clientId} foreignNationalId={foreignNationalId} />
@@ -101,6 +115,23 @@ export default async function ForeignNationalDetailPage({
           canDownload={canDownload}
         />
       </div>
+
+      {canEdit && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">AI補助（書類からの情報抽出）</h2>
+            <p className="text-muted-foreground text-sm">
+              アップロード済みの書類をAIで読み取り、氏名・在留カード番号・在留期限等を提案します。
+              内容を確認したうえで取り込む項目を選択してください（自動保存はされません）。
+            </p>
+          </div>
+          <AiAssistSection
+            clientId={clientId}
+            foreignNationalId={foreignNationalId}
+            documents={documents}
+          />
+        </div>
+      )}
     </div>
   );
 }
