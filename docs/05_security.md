@@ -53,7 +53,7 @@
 | SQLインジェクション | Prismaのパラメータ化クエリを利用し、生SQL文字列結合を禁止する |
 | XSS | Reactの自動エスケープを前提とし、`dangerouslySetInnerHTML`は原則使用しない |
 | CSRF | Auth.jsのCSRFトークン機構、およびServer ActionのOrigin検証を利用する |
-| ファイルアップロード | 許可する拡張子・MIMEタイプ・サイズ上限を検証し、保存先パスにユーザー入力を直接使わない |
+| ファイルアップロード | 許可する拡張子・MIMEタイプ（PDF/JPEG/PNG）・サイズ上限（10MB）を検証し（[src/features/documents/actions.ts](../src/features/documents/actions.ts)）、保存先パスはID由来の値のみを厳格な正規表現で検証して構成する（[src/server/storage/local-storage.ts](../src/server/storage/local-storage.ts)。ユーザー入力の生ファイル名を保存パスに使わない） |
 | 総当たり攻撃 | ログイン試行・パスワードリセットにレート制限を設ける |
 
 ## 4. 監査ログ

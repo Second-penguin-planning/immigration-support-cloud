@@ -24,9 +24,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
             顧客管理
           </Link>
           {session.user.role === UserRole.ADMIN && (
-            <Link href="/settings/users" className="underline">
-              ユーザー管理
-            </Link>
+            <>
+              <Link href="/settings/users" className="underline">
+                ユーザー管理
+              </Link>
+              <Link href="/settings/csv-templates" className="underline">
+                CSVテンプレート
+              </Link>
+            </>
           )}
           <form action={logoutAction}>
             <Button type="submit" variant="secondary">

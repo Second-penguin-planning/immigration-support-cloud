@@ -60,6 +60,14 @@ export default async function ClientsPage({
             </a>
           )}
           {canEdit && (
+            <LinkButton
+              href={`/clients/csv-generate${exportQuery ? `?${exportQuery}` : ''}`}
+              variant="secondary"
+            >
+              入管提出用CSV生成
+            </LinkButton>
+          )}
+          {canEdit && (
             <LinkButton href="/clients/import" variant="secondary">
               Excel一括取込
             </LinkButton>

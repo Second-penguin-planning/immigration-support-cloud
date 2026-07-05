@@ -10,10 +10,11 @@
 | 4 | ダッシュボード | `/dashboard` | Phase4/8 | 全員 |
 | 5 | 顧客一覧・検索 | `/clients` | Phase4 | admin/staff/viewer |
 | 6 | 顧客詳細（法人・外国人・在留資格） | `/clients/[clientId]` | Phase4 | admin/staff/viewer |
-| 7 | 外国人詳細 | `/clients/[clientId]/foreign-nationals/[id]` | Phase4 | admin/staff/viewer |
+| 7 | 外国人詳細（在留資格履歴・書類一覧・アップロードを含む） | `/clients/[clientId]/foreign-nationals/[id]` | Phase4/5 | admin/staff/viewer |
 | 8 | Excel一括取込 | `/clients/import` | Phase4 | admin/staff |
-| 9 | 書類一覧・アップロード | `/clients/[clientId]/documents` | Phase5 | admin/staff/viewer |
-| 10 | CSV出力 | `/clients/export` | Phase5 | admin/staff |
+| 9 | 書類一覧・アップロード（外国人詳細画面に統合） | `/clients/[clientId]/foreign-nationals/[id]`（同上） | Phase5 | admin/staff/viewer |
+| 10 | 検索結果CSV出力（単純出力） | `/api/clients/export` | Phase4 | admin/staff |
+| 10b | 入管提出用CSV生成（テンプレート+検証） | `/clients/csv-generate` + `/api/clients/csv-generate` | Phase5 | admin/staff |
 | 11 | 定期届出一覧 | `/reports` | Phase7 | admin/staff/viewer |
 | 12 | 定期届出作成・編集（差分入力） | `/reports/[id]/edit` | Phase7 | admin/staff |
 | 13 | 面談記録・支援実施状況 | `/reports/[id]/support` | Phase7 | admin/staff |

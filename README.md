@@ -4,7 +4,7 @@
 
 プロジェクトの背景・要件・設計の詳細は [`docs/`](./docs/00_overview.md) を参照。
 
-## 開発方法（Phase4時点）
+## 開発方法（Phase5時点）
 
 前提: Node.js 24系、Docker（PostgreSQLをローカルで動かす場合）
 
@@ -44,7 +44,9 @@ DBの中身は `npm run db:studio` でGUI確認できる。
 本文（招待・パスワードリセットのリンク含む）を出力する（[src/server/email/mailer.ts](./src/server/email/mailer.ts)）。
 
 ログイン後、ヘッダーの「顧客管理」から `/clients`（顧客一覧・検索・CSVダウンロード・Excel一括取込・
-法人/外国人/在留資格のCRUD）を利用できる。
+法人/外国人/在留資格のCRUD）を利用できる。外国人詳細画面では添付書類のアップロード・不足書類表示も行える。
+管理者はヘッダーの「CSVテンプレート」（`/settings/csv-templates`）で入管提出用CSVの出力項目を設定でき、
+`/clients` の「入管提出用CSV生成」から検証付きでダウンロードできる（Shift_JIS/UTF-8選択可）。
 
 > Prisma 7からは接続文字列を `prisma.config.ts` から読み込み、`PrismaClient`には
 > `@prisma/adapter-pg` のドライバアダプタを渡す方式に変更されている

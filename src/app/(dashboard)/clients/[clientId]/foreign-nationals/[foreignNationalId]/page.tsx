@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { DocumentList } from '@/features/documents/document-list';
+import { UploadDocumentForm } from '@/features/documents/upload-document-form';
 import {
   deleteForeignNationalAction,
   updateForeignNationalAction,
@@ -12,6 +14,7 @@ import { ResidenceStatusTable } from '@/features/clients/residence-status-table'
 import { UserRole } from '@/generated/prisma/enums';
 import { auth } from '@/server/auth';
 import { findForeignNationalById } from '@/server/repositories/foreign-national-repository';
+import { listDocuments } from '@/server/repositories/document-repository';
 
 export default async function ForeignNationalDetailPage({
   params,
@@ -26,8 +29,10 @@ export default async function ForeignNationalDetailPage({
   if (!foreignNational || foreignNational.client.id !== clientId) notFound();
 
   const canEdit = session.user.role !== UserRole.VIEWER;
+  const canDownload = session.user.role !== UserRole.VIEWER;
   const updateAction = updateForeignNationalAction.bind(null, clientId, foreignNationalId);
   const createStatusAction = createResidenceStatusAction.bind(null, clientId, foreignNationalId);
+  const documents = await listDocuments(session.user.tenantId, foreignNationalId);
 
   return (
     <div className="space-y-8">
@@ -80,6 +85,20 @@ export default async function ForeignNationalDetailPage({
           foreignNationalId={foreignNationalId}
           residenceStatuses={foreignNational.residenceStatuses}
           canEdit={canEdit}
+        />
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">添付書類</h2>
+        {canEdit && (
+          <UploadDocumentForm clientId={clientId} foreignNationalId={foreignNationalId} />
+        )}
+        <DocumentList
+          clientId={clientId}
+          foreignNationalId={foreignNationalId}
+          documents={documents}
+          canEdit={canEdit}
+          canDownload={canDownload}
         />
       </div>
     </div>

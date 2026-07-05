@@ -58,6 +58,16 @@
   修正されたバージョンはSheetJS独自CDN配布のみでnpmに公開されていない。そのため本プロジェクトでは
   Excel読み取りに`exceljs`を採用した（[src/lib/excel-import.ts](../src/lib/excel-import.ts)）。
 
+### ローカルファイルストレージとNext.jsビルドの注意（実装時の注意、Phase5で確認）
+
+- `src/server/storage/local-storage.ts` は `FILE_STORAGE_LOCAL_DIR`（環境変数）由来の動的パスに
+  `path.resolve`/`path.join`を使う。Next.jsのビルド時ファイルトレーサー(NFT)がこれを検知し、
+  「プロジェクト全体が意図せずトレースされる可能性がある」という advisory warning を出す
+  （`next build`自体は成功する）。`/* turbopackIgnore: true */` コメントで抑制を試みたが完全には
+  解消しないため、既知の警告として許容している。本番でS3等に切り替えた際は解消される見込み。
+- Shift_JIS(CP932)へのエンコードには`iconv-lite`を使用（[src/app/api/clients/csv-generate/route.ts](../src/app/api/clients/csv-generate/route.ts)）。
+  Node標準の`Buffer`はUTF-8系のみのため、日本の行政システム向けCSVには変換ライブラリが必要。
+
 ## 2. ディレクトリ構成（完成形の設計。各Phaseで段階的に実体を作成する）
 
 ```
@@ -75,13 +85,16 @@ immigration-support-cloud/
 │   │   ├── (auth)/              # [Phase3] login, password-reset, invite の未認証ルートグループ
 │   │   ├── (dashboard)/         # [Phase3〜] 認証必須の画面群
 │   │   │   ├── dashboard/       # [Phase3] ダッシュボード（期限管理等はPhase4以降で拡張）
-│   │   │   ├── settings/users/  # [Phase3] ユーザー・権限管理（管理者のみ）
-│   │   │   ├── clients/         # [Phase4] 顧客管理（一覧/検索/新規/詳細/外国人/在留資格/Excel取込）
-│   │   │   ├── reports/         # 定期届出（Phase7）
-│   │   │   └── documents/       # PDF/書類管理（Phase5）
+│   │   │   ├── settings/
+│   │   │   │   ├── users/           # [Phase3] ユーザー・権限管理（管理者のみ）
+│   │   │   │   └── csv-templates/   # [Phase5] CSVテンプレート管理（管理者のみ）
+│   │   │   ├── clients/         # [Phase4/5] 顧客管理（一覧/検索/新規/詳細/外国人/在留資格/書類/Excel取込/CSV生成）
+│   │   │   └── reports/         # 定期届出（Phase7）
 │   │   ├── api/
-│   │   │   ├── auth/[...nextauth]/route.ts  # [Phase3] Auth.jsのRoute Handler
-│   │   │   └── clients/export/route.ts       # [Phase4] 顧客CSVダウンロード
+│   │   │   ├── auth/[...nextauth]/route.ts       # [Phase3] Auth.jsのRoute Handler
+│   │   │   ├── clients/export/route.ts            # [Phase4] 顧客CSVダウンロード（検索結果の単純出力）
+│   │   │   ├── clients/csv-generate/route.ts       # [Phase5] 入管提出用CSV生成（テンプレート+検証）
+│   │   │   └── documents/[documentId]/route.ts     # [Phase5] 添付書類ダウンロード
 │   │   ├── layout.tsx
 │   │   └── page.tsx             # 認証状態に応じて /dashboard へredirect
 │   ├── components/
@@ -91,8 +104,8 @@ immigration-support-cloud/
 │   │   ├── auth/                # [Phase3] ログイン・パスワードリセット
 │   │   ├── users/                # [Phase3] ユーザー招待・権限管理
 │   │   ├── clients/              # [Phase4] 法人/外国人/在留資格CRUD・検索・Excel取込
-│   │   ├── csv-export/
-│   │   ├── pdf-documents/
+│   │   ├── documents/            # [Phase5] 添付書類アップロード・一覧・書類種別マスタ
+│   │   ├── csv-templates/        # [Phase5] CSVテンプレート管理・CSV生成用の行構築
 │   │   ├── periodic-reports/
 │   │   ├── ai-assist/
 │   │   └── dashboard/
@@ -100,13 +113,16 @@ immigration-support-cloud/
 │   │   ├── db/                  # [Phase2] Prisma Clientのシングルトン・暗号化拡張（client.ts, encryption.ts, pii-fields.ts）
 │   │   ├── auth/                 # [Phase3] Auth.js設定・検証トークン・RBACガード（config.ts, index.ts, tokens.ts, guards.ts）
 │   │   ├── email/                # [Phase3] メール送信（mailer.ts、SMTP未設定時はログ出力にフォールバック）
-│   │   ├── repositories/        # [Phase4] tenantIdスコープを強制するデータアクセス層
+│   │   ├── storage/              # [Phase5] ファイルストレージ抽象化（local-storage.ts）
+│   │   ├── repositories/        # [Phase4/5] tenantIdスコープを強制するデータアクセス層
 │   │   │   ├── client-repository.ts
 │   │   │   ├── foreign-national-repository.ts
-│   │   │   └── residence-status-repository.ts
+│   │   │   ├── residence-status-repository.ts
+│   │   │   ├── document-repository.ts
+│   │   │   └── csv-template-repository.ts
 │   │   └── services/            # 複数repositoryを組み合わせるドメインロジック
 │   ├── generated/prisma/        # [Phase2] `prisma generate` の出力。gitignore対象・コミットしない
-│   ├── lib/                     # 汎用ユーティリティ（cn, logger, csv.ts, excel-import.ts等）
+│   ├── lib/                     # 汎用ユーティリティ（cn, logger, csv.ts, csv-template.ts, excel-import.ts等）
 │   ├── types/                   # プロジェクト共通の型定義
 │   └── config/                  # サイト定数・ナビゲーション定義・feature flag
 ├── docker-compose.yml            # ローカル開発用PostgreSQL
@@ -125,14 +141,20 @@ immigration-support-cloud/
 - 各ディレクトリは、対応するPhaseで実際にコードが追加されるタイミングで作成する
   （空ディレクトリを先行して作らず、YAGNI原則に従う）。
 
-## 3. CSV生成テンプレートの構造化方針（Phase5で詳細設計）
+## 3. CSV生成テンプレートの構造化方針（Phase5で実装）
 
-入管オンライン提出フォーマットは将来変更され得るため、以下の方針とする。
+入管オンライン提出フォーマットは将来変更され得るため、以下の方針で実装した。
 
-- 出力列定義（列名・出力順・必須/任意・文字種制約・エンコーディング）をコードではなく
-  設定データ（DBまたはJSON定義）として持つ
-- テンプレートのバージョニングを行い、過去分の再出力時にも当時のテンプレートを再現できるようにする
-- テンプレート適用ロジックと画面表示ロジックを分離する
+- 出力列定義（列名・出力順・必須/任意・エンコーディング）はコードではなく`CsvExportTemplate.columnDefinition`
+  （JSON、[src/features/csv-templates/constants.ts](../src/features/csv-templates/constants.ts)の
+  標準フィールドから選択）として持つ
+- 保存の都度バージョンをインクリメントし旧バージョンを無効化する（[csv-template-repository.ts](../src/server/repositories/csv-template-repository.ts)）。
+  過去バージョンは削除しないため、過去分の再出力時にも当時の定義を再現できる
+- テンプレート適用ロジック（[src/lib/csv-template.ts](../src/lib/csv-template.ts)：行構築・必須項目検証）と
+  画面表示ロジック（`/clients/csv-generate`）を分離。生成前バリデーションはUI表示用とAPI実行時の両方で
+  独立に行い、UIの検証結果を信用しない
+- 出力項目は「必ず含まれる項目（固定）」と「任意項目（チェックボックスで選択）」のみで、列の並び替え・
+  出力ラベルのカスタマイズはMVPでは対応していない（既知の制約、[06_roadmap.md](./06_roadmap.md)参照）
 
 ## 4. AI補助の構成方針（Phase6で詳細設計）
 
