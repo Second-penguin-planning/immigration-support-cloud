@@ -23,6 +23,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Link href="/clients" className="underline">
             顧客管理
           </Link>
+          <Link href="/reports" className="underline">
+            定期届出
+          </Link>
           {session.user.role === UserRole.ADMIN && (
             <>
               <Link href="/settings/users" className="underline">

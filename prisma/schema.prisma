@@ -204,8 +204,18 @@ model PeriodicReport {
   basedOnReportId   String?              @map("based_on_report_id") // 前回データのコピー元
   submittedAt       DateTime?            @map("submitted_at")
   createdByUserId   String?              @map("created_by_user_id")
-  createdAt         DateTime             @default(now()) @map("created_at")
-  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  // 受入れ状況・活動状況に係る届出内容（前回データをコピーし、差分のみ入力する想定）
+  jobDescription           String? @map("job_description") @db.Text // 従事する業務の内容
+  jobDescriptionChanged    Boolean @default(false) @map("job_description_changed") // 前回からの変更有無
+  salaryAmount             Int?    @map("salary_amount") // 報酬の月額（円）
+  salaryChanged            Boolean @default(false) @map("salary_changed")
+  workingConditionsNotes   String? @map("working_conditions_notes") @db.Text // 労働時間・休日等の変更内容
+  workingConditionsChanged Boolean @default(false) @map("working_conditions_changed")
+  notes                    String? @db.Text // その他特記事項
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   foreignNational ForeignNational  @relation(fields: [foreignNationalId], references: [id], onDelete: Cascade)
   basedOnReport   PeriodicReport?  @relation("ReportHistory", fields: [basedOnReportId], references: [id], onDelete: SetNull)

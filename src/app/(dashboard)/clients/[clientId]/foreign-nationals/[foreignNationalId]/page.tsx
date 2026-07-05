@@ -13,10 +13,14 @@ import { ForeignNationalForm } from '@/features/clients/foreign-national-form';
 import { createResidenceStatusAction } from '@/features/clients/residence-status-actions';
 import { ResidenceStatusForm } from '@/features/clients/residence-status-form';
 import { ResidenceStatusTable } from '@/features/clients/residence-status-table';
+import { createDraftPeriodicReportAction } from '@/features/periodic-reports/actions';
+import { ForeignNationalReportList } from '@/features/periodic-reports/foreign-national-report-list';
+import { NewReportForm } from '@/features/periodic-reports/new-report-form';
 import { UserRole } from '@/generated/prisma/enums';
 import { auth } from '@/server/auth';
 import { findForeignNationalById } from '@/server/repositories/foreign-national-repository';
 import { listDocuments } from '@/server/repositories/document-repository';
+import { listPeriodicReports } from '@/server/repositories/periodic-report-repository';
 
 export default async function ForeignNationalDetailPage({
   params,
@@ -34,7 +38,13 @@ export default async function ForeignNationalDetailPage({
   const canDownload = session.user.role !== UserRole.VIEWER;
   const updateAction = updateForeignNationalAction.bind(null, clientId, foreignNationalId);
   const createStatusAction = createResidenceStatusAction.bind(null, clientId, foreignNationalId);
+  const createReportAction = createDraftPeriodicReportAction.bind(
+    null,
+    clientId,
+    foreignNationalId,
+  );
   const documents = await listDocuments(session.user.tenantId, foreignNationalId);
+  const periodicReports = await listPeriodicReports(session.user.tenantId, { foreignNationalId });
 
   return (
     <div className="space-y-8">
@@ -114,6 +124,12 @@ export default async function ForeignNationalDetailPage({
           canEdit={canEdit}
           canDownload={canDownload}
         />
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">定期届出</h2>
+        {canEdit && <NewReportForm action={createReportAction} />}
+        <ForeignNationalReportList reports={periodicReports} />
       </div>
 
       {canEdit && (
