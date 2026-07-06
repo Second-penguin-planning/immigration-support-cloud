@@ -9,24 +9,23 @@
 - **Vercelプロジェクト**: `second-penguin-s-projects/immigration-support-cloud`
 - **DB**: VercelマーケットプレイスからNeon PostgreSQL（`isc-prod-db`）を作成・接続済み。
   マイグレーション（`prisma migrate deploy`）を適用済み
+- **ファイルストレージ**: Cloudflare R2（バケット`isc-documents`）を作成し、`FILE_STORAGE_DRIVER=s3`・
+  `S3_ENDPOINT`（アカウント単位のR2エンドポイント）・`S3_REGION=auto`で接続済み
+- **AI補助機能**: `ANTHROPIC_API_KEY`を設定済み。本番でAI補助（書類からの項目抽出）が利用可能
+- **メール送信**: Google Workspace（Gmail）のSMTPリレー（`smtp.gmail.com:587`、アプリパスワード使用）で
+  設定済み。パスワードリセットメールの実送信・受信を確認済み
 - 初期管理者アカウント（`info@second-penguin.com`）を作成済み。パスワードは初回発行時に
   1回だけ共有済みのため、**ログイン後すみやかにパスワードを変更すること**（パスワード変更・
   再発行UIは現状無いため、変更が必要な場合は`/password-reset`からリセットする）
 - ログイン→ダッシュボード表示までの疎通を実際にHTTPリクエストで確認済み
 
-### 未設定・今後の対応が必要な項目
+### 今後の対応が必要な項目
 
-以下はユーザーが実際の契約・認証情報を用意していないため未設定。設定するまでは該当機能が使えない
-（設定してもコード変更は不要。Vercelの環境変数を追加して再デプロイするだけでよい）。
-
-- **ANTHROPIC_API_KEY未設定**: AI補助機能は「APIキー未設定」エラー表示のまま
-- **SMTP未設定**: ユーザー招待・パスワードリセットメールは実際には送信されず、Vercelの関数ログに
-  出力されるのみ（`EMAIL_SERVER_HOST`等を設定すると解消）
-- **S3未設定（`FILE_STORAGE_DRIVER=local`のまま、`FILE_STORAGE_LOCAL_DIR=/tmp/uploads`に暫定設定）**:
-  Vercelのサーバーレス環境では`/tmp`もリクエスト間・インスタンス間で永続化されないため、
-  **書類アップロード機能は本番では実質的に使用できない**状態。3節の手順でS3に切り替えるまでの暫定措置
 - **バックアップの自動日次実行は未設定**（5節参照。手動実行のスクリプトのみ整備済み）
+- **バックアップからの復元テストは未実施**（5節「復元テスト」参照）
 - 監査ログ・レート制限・二段階認証は引き続き未実装（[06_roadmap.md](./06_roadmap.md)参照）
+- 使わなくなったCloudflare APIトークン（R2用トークンの発行しくじり分）が残っている場合、
+  Cloudflareダッシュボードの「Account API tokens」から不要なものを削除しておくこと
 
 ## 1. 事前準備（本番用の外部サービス）
 
@@ -70,6 +69,26 @@ S3_REGION="ap-northeast-1"
 # AWS S3本体ではなくMinIO等のS3互換ストレージを使う場合のみ設定する
 S3_ENDPOINT=""
 ```
+
+### 本番での実際の設定（Cloudflare R2）
+
+本プロジェクトではAWS S3ではなくCloudflare R2（S3互換、egress無料）を採用した。
+
+```
+FILE_STORAGE_DRIVER="s3"
+S3_BUCKET="isc-documents"
+S3_ACCESS_KEY_ID="<Cloudflareダッシュボード R2 > Manage API Tokensで発行したAccess Key ID>"
+S3_SECRET_ACCESS_KEY="<同上のSecret Access Key>"
+S3_REGION="auto"
+S3_ENDPOINT="https://<CloudflareアカウントID>.r2.cloudflarestorage.com"
+```
+
+- R2用のトークンは「Account API tokens」画面の「Create Token」→ Permission検索で
+  「R2」と入力→「Workers R2 Storage」の**Edit**権限で発行する（Readのみだとアップロードができない）
+- Access Key ID・Secret Access Keyはトークン作成完了画面に**一度だけ**表示される
+  （画面を離れると二度と表示されないため、必ずその場でコピーすること）
+- バケットは作成時点でPublic Access: Disabled（非公開）になっており、ダウンロードは
+  アプリの`/api/documents/[documentId]`（認証・RBAC経由）からのみ行う設計と一致している
 
 切り替えは`src/server/storage/index.ts`のfacadeが環境変数を見て自動的に行うため、
 アプリケーションコード側の変更は不要（[src/features/documents/actions.ts](../src/features/documents/actions.ts)等の呼び出し元は
@@ -124,12 +143,12 @@ npm run db:restore -- backups/backup_20260705_120000.dump
 
 ## 6. デプロイ前チェックリスト
 
-- [ ] `.env.example`の全項目をVercel Environment Variablesに設定した（プレースホルダのまま残していない）
-- [ ] `DATABASE_URL`はコネクションプーリング対応の接続文字列である
-- [ ] `FILE_STORAGE_DRIVER=s3`に設定し、S3関連の環境変数を設定した
-- [ ] `AUTH_URL` / `APP_BASE_URL`を本番ドメインに設定した
-- [ ] `npm run db:deploy`で本番DBにマイグレーションを適用した
-- [ ] `npm run db:seed`は本番では実行しない（サンプルデータのため。実データ投入は別途行う）
-- [ ] 管理者アカウントを1件作成し、ログイン・主要導線を確認した
+- [x] `.env.example`の全項目をVercel Environment Variablesに設定した（プレースホルダのまま残していない）
+- [x] `DATABASE_URL`はコネクションプーリング対応の接続文字列である（Neonのpooled connection）
+- [x] `FILE_STORAGE_DRIVER=s3`に設定し、S3関連の環境変数を設定した（Cloudflare R2）
+- [x] `AUTH_URL` / `APP_BASE_URL`を本番ドメインに設定した
+- [x] `npm run db:deploy`で本番DBにマイグレーションを適用した
+- [x] `npm run db:seed`は本番では実行しない（サンプルデータのため。実データ投入は別途行う）
+- [x] 管理者アカウントを1件作成し、ログイン・主要導線を確認した
 - [ ] バックアップの自動実行（日次）をCI/CD等でスケジューリングした
-- [ ] `ENCRYPTION_MASTER_KEY`をオフラインの安全な場所にもバックアップした
+- [ ] `ENCRYPTION_MASTER_KEY`をオフラインの安全な場所にもバックアップした（未実施。パスワードマネージャー等への保管を推奨）
