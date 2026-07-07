@@ -30,6 +30,14 @@ enum PeriodicReportStatus {
   SUBMITTED
 }
 
+enum CoeApplicationStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -76,6 +84,7 @@ model User {
   auditLogs       AuditLog[]
   notifications   Notification[]
   createdReports  PeriodicReport[]
+  coeApplications CoeApplication[]
 
   @@index([tenantId])
   @@map("users")
@@ -142,6 +151,7 @@ model ForeignNational {
   residenceStatuses ResidenceStatus[]
   documents         Document[]
   periodicReports   PeriodicReport[]
+  coeApplications   CoeApplication[]
 
   @@index([clientId])
   @@index([passportNumberHash])
@@ -161,10 +171,34 @@ model ResidenceStatus {
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
   foreignNational ForeignNational @relation(fields: [foreignNationalId], references: [id], onDelete: Cascade)
+  coeApplication  CoeApplication?
 
   @@index([foreignNationalId])
   @@index([expiresAt])
   @@map("residence_statuses")
+}
+
+/// 在留資格認定証明書交付申請のドラフト・進捗管理。交付後は`ResidenceStatus`へ変換して確定させる。
+model CoeApplication {
+  id                         String               @id @default(cuid())
+  foreignNationalId          String               @map("foreign_national_id")
+  statusType                 String               @map("status_type") // 申請する在留資格の種類
+  status                     CoeApplicationStatus @default(DRAFT)
+  plannedSubmissionDate      DateTime?            @map("planned_submission_date") @db.Date
+  submittedAt                DateTime?            @map("submitted_at") @db.Date
+  resultNotifiedAt           DateTime?            @map("result_notified_at") @db.Date
+  notes                      String?              @db.Text
+  convertedResidenceStatusId String?              @unique @map("converted_residence_status_id")
+  createdByUserId            String?              @map("created_by_user_id")
+  createdAt                  DateTime             @default(now()) @map("created_at")
+  updatedAt                  DateTime             @updatedAt @map("updated_at")
+
+  foreignNational          ForeignNational  @relation(fields: [foreignNationalId], references: [id], onDelete: Cascade)
+  convertedResidenceStatus ResidenceStatus? @relation(fields: [convertedResidenceStatusId], references: [id], onDelete: SetNull)
+  createdBy                User?            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([foreignNationalId])
+  @@map("coe_applications")
 }
 
 // =============================================================================

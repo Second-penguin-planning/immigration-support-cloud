@@ -24,6 +24,7 @@
 | Client | 受入企業の法人情報 |
 | ForeignNational | 外国人情報（氏名・国籍・旅券番号・在留カード番号等） |
 | ResidenceStatus | 在留資格の履歴（資格種類・許可年月日・在留期限） |
+| CoeApplication | 在留資格認定証明書交付申請の進捗管理。交付後は`ResidenceStatus`へ変換する |
 | Document | 添付書類（PDF/画像。ファイル名・書類種別・アップロード日時） |
 | PeriodicReport | 特定技能定期届出のドラフト・提出履歴 |
 | Interview | 定期届出に紐づく面談記録 |

@@ -5,6 +5,9 @@ import { DocumentList } from '@/features/documents/document-list';
 import { UploadDocumentForm } from '@/features/documents/upload-document-form';
 import { AiAssistSection } from '@/features/ai-assist/ai-assist-section';
 import { AnomalyList } from '@/features/ai-assist/anomaly-list';
+import { createCoeApplicationAction } from '@/features/coe-applications/actions';
+import { CoeApplicationForm } from '@/features/coe-applications/coe-application-form';
+import { CoeApplicationTable } from '@/features/coe-applications/coe-application-table';
 import {
   deleteForeignNationalAction,
   updateForeignNationalAction,
@@ -19,6 +22,7 @@ import { NewReportForm } from '@/features/periodic-reports/new-report-form';
 import { UserRole } from '@/generated/prisma/enums';
 import { auth } from '@/server/auth';
 import { findForeignNationalById } from '@/server/repositories/foreign-national-repository';
+import { listCoeApplications } from '@/server/repositories/coe-application-repository';
 import { listDocuments } from '@/server/repositories/document-repository';
 import { listPeriodicReports } from '@/server/repositories/periodic-report-repository';
 
@@ -43,8 +47,10 @@ export default async function ForeignNationalDetailPage({
     clientId,
     foreignNationalId,
   );
+  const createCoeAction = createCoeApplicationAction.bind(null, clientId, foreignNationalId);
   const documents = await listDocuments(session.user.tenantId, foreignNationalId);
   const periodicReports = await listPeriodicReports(session.user.tenantId, { foreignNationalId });
+  const coeApplications = await listCoeApplications(session.user.tenantId, foreignNationalId);
 
   return (
     <div className="space-y-8">
@@ -88,6 +94,21 @@ export default async function ForeignNationalDetailPage({
           </div>
         </dl>
       )}
+
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">在留資格認定証明書交付申請</h2>
+        <p className="text-muted-foreground text-sm">
+          初めて在留資格を取得する場合の交付申請を管理します。交付されたら「在留資格として確定」から
+          下の「在留資格の履歴」に反映できます。
+        </p>
+        {canEdit && <CoeApplicationForm action={createCoeAction} />}
+        <CoeApplicationTable
+          clientId={clientId}
+          foreignNationalId={foreignNationalId}
+          applications={coeApplications}
+          canEdit={canEdit}
+        />
+      </div>
 
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">在留資格の履歴</h2>
